@@ -80,9 +80,9 @@ wrangler pages dev public
 
 ## 部署到 Cloudflare Pages
 
-> **重要**：Pages 的 **Direct Upload（直接上传）不支持 Functions**。必须使用下面两种方式之一，后端解析才会生效。
+> **重要**：Cloudflare 控制台里的 **Upload assets（拖拽上传）不支持 Functions**，传上去只有一个静态页面，后端接口会全部 404。请使用下面两种方式之一，后端解析才会生效。
 
-**前置准备**：一个 GitHub 账号、一个 Cloudflare 账号，注册均免费。「方式一」全程在浏览器里操作，不需要安装任何工具；「方式二」需本机安装 Node.js 18+。
+**前置准备**：一个 Cloudflare 账号（免费注册）。「方式一」还需要一个 GitHub 账号，但全程在浏览器里操作，不用安装任何工具；「方式二」不需要 GitHub，只需本机安装 Node.js 18+。
 
 ### 方式一：网页部署（推荐，全程浏览器操作）
 
@@ -104,22 +104,67 @@ wrangler pages dev public
 
 以后在网页上提交 / 上传新文件，Cloudflare 会自动重新构建部署；后台保存的配置存于 KV，无需重新部署即可生效。
 
-### 方式二：Wrangler CLI
+### 方式二：Wrangler 命令行直接上传（不需要 GitHub）
 
-> 必须在项目根目录（含 `functions/` 与 `wrangler.toml` 的那一层）执行，wrangler 靠当前目录识别 `functions/`。
+> 与控制台的「Upload assets 拖拽上传」不同，用 Wrangler 上传会**连同 `functions/` 后端一起部署**，因此这条路**完全不需要 GitHub**。
+> 以下命令都要在**项目根目录**（含 `functions/` 与 `wrangler.toml` 的那一层）执行，wrangler 靠当前目录识别 `functions/`。
+
+**0. 安装 wrangler**
 
 ```bash
-# 安装 wrangler（国内可用镜像加速）
 npm i -g wrangler --registry=https://registry.npmmirror.com
+```
 
-# 本地预览
-wrangler pages dev public
+**1. 登录 Cloudflare**（会打开浏览器，登录后点授权）
 
-# 部署：先把 wrangler.toml 中 kv_namespaces 的 id / preview_id 换成你的真实 namespace ID
+```bash
+wrangler login
+wrangler whoami   # 确认登录的账号是否正确
+```
+
+**2. 创建 KV 命名空间**（后台配置存储），记下输出的 `id`
+
+```bash
+wrangler kv namespace create yunplayer-config
+```
+
+**3. 把 id 填进 `wrangler.toml`**
+
+```toml
+[[kv_namespaces]]
+binding = "CONFIG_KV"        # 必须叫 CONFIG_KV，改了后台就存不上
+id = "上一步输出的 id"
+preview_id = "上一步输出的 id"   # 预览环境可另建一个，简单起见填同一个也能用
+```
+
+**4. 创建 Pages 项目**（项目名决定默认域名 `<项目名>.pages.dev`）
+
+```bash
+wrangler pages project create yunplayer --production-branch main
+```
+
+**5. 部署**（静态资源 + Functions 一起上传）
+
+```bash
 wrangler pages deploy public --project-name yunplayer
 ```
 
+成功后输出里会给出一个 `https://<随机串>.<项目名>.pages.dev` 地址，正式地址就是 `https://<项目名>.pages.dev`。
+
+**6. 验证后端是否生效**
+
+```bash
+curl https://yunplayer.pages.dev/api/site
+```
+
+返回一段 JSON（含 `"success":1`）即说明 Functions 正常；若返回 404 或 HTML，请检查是否在项目根目录执行、以及 `functions/` 是否完整。
+
+> **本地预览**（可选）：`wrangler pages dev public`，默认地址 <http://127.0.0.1:8788>
+>
 > 不用后台功能时可以不绑 KV，站点仍可正常搜索 / 播放（配置走 `_config.js` 默认值）。
+> 若控制台提示未绑定 KV：项目 → **Settings → Bindings** → Add → KV namespace，变量名填 `CONFIG_KV`，再重新执行第 5 步。
+>
+> ⚠️ 这种方式**没有 Git 自动部署**，以后每次改了代码都要重新执行第 5 步。
 
 ### 部署后验证（必做）
 

@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="YunPlayer - 聚合全网资源，智能解析在线观看" />
+  <title>YunPlayer · 智能解析播放</title>
+  <link rel="stylesheet" href="/css/style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='24' fill='%236366f1'/><path d='M38 30l34 20-34 20z' fill='white'/></svg>" />
+  <!-- 提前应用已保存的模板风格，避免刷新时闪烁 -->
+  <script>try{if(localStorage.getItem("yunplayer_theme")==="light")document.documentElement.dataset.theme="light";}catch(e){}</script>
+</head>
+<body>
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+  <div class="blob blob-3"></div>
+
+  <nav class="nav">
+    <a class="logo" id="logoName" href="/">YunPlayer</a>
+    <div class="nav-links">
+      <a href="/">首页</a>
+      <a href="/admin">后台</a>
+    </div>
+  </nav>
+
+  <div class="page">
+    <header class="hero">
+      <h1 id="heroTitle"><em>Yun</em>Player</h1>
+      <p>聚合全网资源 · 智能解析 · 高清在线观看</p>
+
+      <div class="search-wrap">
+        <form class="search-box" id="searchForm">
+          <input id="searchInput" type="text" placeholder="输入片名或粘贴视频链接，如：https://..." autocomplete="off" />
+          <button type="submit">立即搜索</button>
+        </form>
+        <div class="hot" id="hot"></div>
+      </div>
+
+      <div class="site-intro" id="siteIntro" style="display:none"></div>
+    </header>
+
+    <main>
+      <div class="results" id="results"></div>
+      <div class="empty" id="empty" style="display:none"></div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <span class="footer-name" data-site-copy>YunPlayer</span>
+          <span class="footer-tagline">聚合全网影视资源 · 智能解析 · 高清在线观看</span>
+        </div>
+        <nav class="footer-nav">
+          <a href="/">首页</a>
+          <a href="mailto:admin@example.com" data-foot-mail data-foot-contact>联系我们</a>
+        </nav>
+      </div>
+      <p class="footer-note" data-foot-note>本站为技术演示站点，不存储、不制作、不提供任何影视资源，全部内容均来自第三方公开接口，版权归原权利人所有；如相关内容侵犯了您的合法权益，请通过上方邮箱与我们联系，核实后将及时处理。</p>
+      <div class="footer-meta">
+        <span data-foot-copyright>© 2026 YunPlayer 版权所有</span>
+        <span data-foot-icp>京ICP备00000000号</span>
+        <span data-foot-extra>本站仅供技术学习与研究使用</span>
+      </div>
+    </footer>
+  </div>
+
+  <script src="/js/common.js"></script>
+  <script src="/js/index.js"></script>
+</body>
+</html>

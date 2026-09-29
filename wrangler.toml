@@ -1,0 +1,13 @@
+# YunPlayer - Cloudflare Pages 配置
+# 部署到线上前：把 kv_namespaces.id 换成你在 Cloudflare 控制台创建的 KV namespace ID
+
+name = "yunplayer"
+compatibility_date = "2026-09-11"
+pages_build_output_dir = "public"
+
+# 配置存储（后台管理页面使用）
+# 创建方式：Cloudflare 控制台 → Workers & Pages → KV → Create namespace
+[[kv_namespaces]]
+binding = "CONFIG_KV"
+id = "REPLACE_WITH_YOUR_NAMESPACE_ID"
+preview_id = "REPLACE_WITH_YOUR_PREVIEW_ID"

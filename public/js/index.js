@@ -94,8 +94,7 @@ document.getElementById("hot").addEventListener("click", (e) => {
       applySiteMeta(data);
       if (data.title) {
         document.getElementById("logoName").textContent = data.title;
-        document.getElementById("heroTitle").innerHTML =
-          "<em>" + esc(data.title.split(/[ _-]/)[0]) + "</em>" + esc(data.title.split(/[ _-]/).slice(1).join(" "));
+        document.getElementById("heroTitle").textContent = data.title;
         document.title = data.title + " · 智能解析播放";
       }
       // 热门词标签（不显示「热门：」前缀）
@@ -125,3 +124,20 @@ if (autoWd) {
   document.getElementById("searchInput").value = autoWd;
   doSearch(autoWd);
 }
+
+// 主页日期时钟（每秒刷新）
+(function startClock() {
+  const timeEl = document.getElementById("clockTime");
+  const dateEl = document.getElementById("clockDate");
+  if (!timeEl || !dateEl) return;
+  const WEEK = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
+  const pad = (n, len) => String(n).padStart(len || 2, "0");
+  function tick() {
+    const d = new Date();
+    timeEl.textContent = pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
+    dateEl.textContent =
+      pad(d.getFullYear(), 4) + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + " " + WEEK[d.getDay()];
+  }
+  tick();
+  setInterval(tick, 1000);
+})();

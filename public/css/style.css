@@ -52,9 +52,6 @@
   color: #4f46e5;
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.7);
 }
-[data-theme="light"] .hero h1 em {
-  filter: drop-shadow(0 6px 20px rgba(124, 58, 237, 0.28));
-}
 [data-theme="light"] .skeleton::after {
   background: linear-gradient(90deg, transparent, rgba(23, 28, 51, 0.06), transparent);
 }
@@ -63,6 +60,19 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+}
+
+/* 视觉隐藏但保留给搜索引擎与读屏（品牌主标题，避免与左上角 logo 重复） */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 html {
@@ -159,24 +169,47 @@ body {
   padding: 60px 0 26px;
   animation: fadeUp 0.7s ease both;
 }
-.hero h1 {
-  font-size: clamp(40px, 8vw, 68px);
-  font-weight: 900;
-  letter-spacing: 1px;
-  line-height: 1.1;
-}
-.hero h1 em {
-  font-style: normal;
-  background: linear-gradient(135deg, var(--accent-1), var(--accent-2), var(--accent-3));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  filter: drop-shadow(0 0 24px rgba(168, 85, 247, 0.45));
-}
 .hero p {
   color: var(--text-2);
   margin-top: 14px;
   font-size: clamp(13px, 3vw, 16px);
+}
+
+/* ---------- 首页日期时钟 ---------- */
+.clock {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 20px;
+  font-family: "Share Tech Mono", "SFMono-Regular", Consolas, "Courier New", monospace;
+  line-height: 1;
+}
+.clock-time {
+  font-size: clamp(38px, 8vw, 62px);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--link-accent);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 12px rgba(56, 189, 248, 0.55), 0 0 34px rgba(129, 140, 248, 0.35);
+}
+.clock-date {
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  color: var(--text-2);
+}
+[data-theme="light"] .clock-time {
+  text-shadow: 0 2px 12px rgba(79, 70, 229, 0.25);
+}
+@media (max-width: 640px) {
+  .clock {
+    margin-bottom: 14px;
+    gap: 4px;
+  }
+  .clock-date {
+    font-size: 12px;
+    letter-spacing: 0.1em;
+  }
 }
 
 /* ---------- 搜索框（毛玻璃） ---------- */

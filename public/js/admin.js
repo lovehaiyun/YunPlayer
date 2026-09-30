@@ -39,6 +39,7 @@ document.getElementById("loginBtn").addEventListener("click", async () => {
 // ---------- 配置加载与渲染 ----------
 async function loadConfig() {
   let data;
+  const hadAuth = !!getAuth().user; // 本次请求前是否已持有登录凭据
   try {
     data = await fetch("/api/admin/config", { headers: authHeaders() }).then((r) => r.json());
   } catch (e) {
@@ -49,7 +50,8 @@ async function loadConfig() {
     if (String(data.m || "").indexOf("网络错误") !== 0) sessionStorage.removeItem(AUTH_KEY);
     document.getElementById("loginBox").style.display = "block";
     document.getElementById("panelBox").style.display = "none";
-    toast(data.m || "登录失败");
+    // 已登录却校验失败，说明密码已在别处被修改，需用新密码重新登录
+    toast(hadAuth ? "登录信息已失效，请用新密码重新登录" : data.m || "登录失败");
     return;
   }
   document.getElementById("loginBox").style.display = "none";

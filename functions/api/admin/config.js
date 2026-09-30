@@ -123,10 +123,12 @@ export async function onRequest(context) {
       resources,
     };
 
-    // 后台账号（可选）：修改用户名和/或密码；密码只保存加盐哈希，不落明文
+    // 后台账号：默认沿用 KV 中已保存的账号，避免「保存站点设置」时把已修改的密码冲掉
     const adminIn = body.admin;
-    if (adminIn && typeof adminIn === "object" && (strOf(adminIn.user) || strOf(adminIn.pass))) {
-      const cur = (await getConfig(env)).admin || {};
+    const hasAdminInput =
+      adminIn && typeof adminIn === "object" && (strOf(adminIn.user) || strOf(adminIn.pass));
+    const cur = (await getConfig(env)).admin || {};
+    if (hasAdminInput) {
       const user = strOf(adminIn.user) || strOf(cur.user) || "admin";
       const pass = strOf(adminIn.pass);
       // 未提供新密码时：沿用已有哈希；若旧值来自文件明文则迁移为哈希
@@ -137,6 +139,9 @@ export async function onRequest(context) {
       } else {
         toSave.admin = { user, salt: cur.salt, passHash: cur.passHash };
       }
+    } else if (cur.passHash && cur.salt) {
+      // 本次未修改账号：保留原有加盐哈希，否则会回退到 _config.js 的默认密码
+      toSave.admin = { user: strOf(cur.user) || "admin", salt: cur.salt, passHash: cur.passHash };
     }
 
     await env.CONFIG_KV.put("config", JSON.stringify(toSave));

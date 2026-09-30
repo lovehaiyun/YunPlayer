@@ -41,8 +41,7 @@ function normalizeFooter(f) {
     return strOf(raw).slice(0, max);
   };
   return {
-    contactText: pick("contactText", 20),
-    email: pick("email", 80),
+    link: pick("link", 200),
     note: pick("note", 500),
     // 版权信息始终保持有值，避免页脚行首出现多余分隔符
     copyright: pick("copyright", 120) || strOf(d.copyright),

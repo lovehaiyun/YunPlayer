@@ -33,26 +33,28 @@ export async function fetchText(url, timeout = 12000, opts = {}) {
   }
 }
 
-/** 带超时的二进制抓取（供 m3u8 代理透传 .ts 分片/密钥使用） */
-export async function fetchBuf(url, timeout = 20000) {
+/**
+ * 流式抓取（不缓冲响应体）：供 m3u8 代理透传 .ts 分片/密钥使用。
+ * 超时只作用于「拿到响应头」阶段，拿到后即清除计时器，
+ * 否则大分片会在传输途中被中断，反而造成卡顿/失败。
+ */
+export async function fetchStream(url, timeout = 20000, range) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeout);
   try {
+    const headers = { "User-Agent": UA, Accept: "*/*" };
+    // fMP4/CMAF 的分片按 Byte-Range 请求，透传 Range 才能只取需要的字节
+    if (range) headers.Range = range;
     const res = await fetch(url, {
       redirect: "follow",
-      headers: { "User-Agent": UA, Accept: "*/*" },
+      headers,
       signal: ctrl.signal,
     });
-    return {
-      ok: res.ok,
-      status: res.status,
-      type: res.headers.get("content-type") || "",
-      body: await res.arrayBuffer(),
-    };
-  } catch (e) {
-    return { ok: false, status: 0, type: "", body: null };
-  } finally {
     clearTimeout(timer);
+    return res;
+  } catch (e) {
+    clearTimeout(timer);
+    return null;
   }
 }
 
@@ -77,7 +79,7 @@ export async function fetchMulti(urls, limit = 5, timeout) {
  * 判断是否为浏览器可直接播放的视频文件链接
  * 注：不含 flv —— Chrome 等现代浏览器已移除原生 FLV 支持，直链播放会失败
  */
-export function detectVideoFile(u) {
+function detectVideoFile(u) {
   return /^https?:\/\//i.test(u) && /\.(mp4|m3u8|webm|ogg|m4v)([?#]|$)/i.test(u);
 }
 
@@ -92,14 +94,14 @@ function appendTarget(base, target) {
 }
 
 /** 从 HTML 中提取 <title> 并清洗成可搜索的片名 */
-export function extractTitle(html) {
+function extractTitle(html) {
   const m = (html || "").match(/<title[^>]*>([\s\S]*?)<\/title>/i);
   if (!m) return "";
   return cleanTitle(m[1]);
 }
 
 /** 清洗标题：去掉标签、多余空白和常见后缀（如 "剧名 - xxx播放站"、"《剧名》xxx-爱奇艺"） */
-export function cleanTitle(t) {
+function cleanTitle(t) {
   t = (t || "")
     .replace(/<[^>]+>/g, "")
     .replace(/\s+/g, " ")
@@ -122,7 +124,7 @@ export function cleanTitle(t) {
 }
 
 /** 判断标题是否为站点通用文案（非影片名），用于触发爬虫 UA 重试 */
-export function isGenericTitle(t) {
+function isGenericTitle(t) {
   const s = cleanTitle(t);
   if (!s || s.length < 2) return true;
   if (
@@ -175,7 +177,7 @@ function parseXmlSearch(html) {
 }
 
 /** 解析资源站返回的播放列表（JSON / XML），返回 { name, sources:[{flag, parts}] } */
-export function parseVideoList(html) {
+function parseVideoList(html) {
   const t = (html || "").trim();
   let name = "";
   const sources = [];
@@ -247,7 +249,16 @@ export async function getConfig(env) {
   if (env && env.CONFIG_KV) {
     try {
       const raw = await env.CONFIG_KV.get("config");
-      if (raw) return { ...CONFIG, ...JSON.parse(raw) };
+      if (raw) {
+        const saved = JSON.parse(raw);
+        // footer/admin 是嵌套对象，浅合并会让默认值里新增的字段整体丢失，需逐键合并
+        return {
+          ...CONFIG,
+          ...saved,
+          footer: { ...CONFIG.footer, ...(saved.footer || {}) },
+          admin: { ...CONFIG.admin, ...(saved.admin || {}) },
+        };
+      }
     } catch (e) {
       /* KV 读取失败则用默认配置 */
     }
@@ -350,7 +361,8 @@ export async function search(name, cfg, opts = {}) {
         if (pic) j.it.pic = pic;
       });
     }
-    await cachePut(cacheKey, out, 120);
+    // 只缓存非空结果：资源站临时超时/抽风时空数组会被当作命中，导致 2 分钟内一直搜不到
+    if (out.length) await cachePut(cacheKey, out, 120);
   }
   return out;
 }
@@ -380,13 +392,46 @@ function rank(title, key) {
   return 3;
 }
 
-/** 根据资源站序号(flag) + 视频ID 获取播放数据 */
-export async function getVideoById(flag, id, cfg) {
+/** 取启用中的解析接口列表 */
+function enabledParses(cfg) {
+  return (cfg.parse || []).filter((p) => p && p.off);
+}
+
+/** 解析接口展示名列表（无名时按序号兜底） */
+function parseNames(list) {
+  return list.map((p, i) => p.name || "解析接口 " + (i + 1));
+}
+
+/**
+ * 按索引选取解析接口：越界或非法值回退到第 0 个（即默认使用第一个启用的接口）；
+ * 无启用接口时 item 为 null、index 为 -1
+ */
+function pickParse(cfg, idx) {
+  const list = enabledParses(cfg);
+  if (!list.length) return { item: null, index: -1, list };
+  const n = parseInt(idx, 10);
+  const index = Number.isNaN(n) || n < 0 || n >= list.length ? 0 : n;
+  return { item: list[index], index, list };
+}
+
+/** 为 jx 模式的结果附加「解析线路」信息（名称列表 + 当前索引），供前台切换标签使用 */
+function withJx(res, pick) {
+  if (res && res.type === "jx" && pick.index >= 0) {
+    res.jxIndex = pick.index;
+    res.jxList = parseNames(pick.list);
+  }
+  return res;
+}
+
+/** 根据资源站序号(flag) + 视频ID 获取播放数据（jxIdx 指定使用第几个启用的解析接口） */
+export async function getVideoById(flag, id, cfg, jxIdx) {
   const site = cfg.resources[flag];
   if (!site || !site.off) return { success: 0, m: "资源站不可用" };
   const vid = String(id == null ? "" : id).trim();
   if (!vid) return { success: 0, m: "缺少视频 ID" };
-  const cacheKey = "video?flag=" + flag + "&id=" + encodeURIComponent(vid);
+  const pick = pickParse(cfg, jxIdx);
+  // 缓存键需带解析接口索引，否则切换线路会命中上一个接口的结果
+  const cacheKey = "video?flag=" + flag + "&id=" + encodeURIComponent(vid) + "&jx=" + pick.index;
   const cached = await cacheGet(cacheKey);
   if (cached) return cached;
   const html = await fetchText(
@@ -395,7 +440,7 @@ export async function getVideoById(flag, id, cfg) {
   if (!html) return { success: 0, m: "获取数据失败" };
   const { name, sources } = parseVideoList(html);
   if (!sources.length) return { success: 0, m: "未获取到播放地址" };
-  const jx = cfg.parse.find((p) => p.off);
+  const jx = pick.item;
   let type = "video";
   if (jx) {
     // 解析接口已启用 → 默认所有线路统一走解析接口播放（保留原始地址供前端筛选）
@@ -417,7 +462,7 @@ export async function getVideoById(flag, id, cfg) {
     sources.push(...direct);
   }
   const first = sources[0];
-  const res = {
+  const res = withJx({
     success: 1,
     type,
     title: name || site.name,
@@ -427,24 +472,25 @@ export async function getVideoById(flag, id, cfg) {
     url: first.parts[0].url,
     parts: first.parts,
     sources,
-  };
+  }, pick);
   await cachePut(cacheKey, res, 180);
   return res;
 }
 
-/** 根据视频链接解析播放：直链→标题搜索→第三方解析兜底 */
-export async function getVideoByUrl(inputUrl, cfg) {
+/** 根据视频链接解析播放：直链→标题搜索→第三方解析兜底（jxIdx 指定解析接口） */
+export async function getVideoByUrl(inputUrl, cfg, jxIdx) {
   // 仅接受 http/https 链接，避免 javascript: 等异常协议流入播放器/解析接口
   if (!/^https?:\/\//i.test(String(inputUrl || "").trim())) {
     return { success: 0, m: "链接格式不正确，请粘贴以 http:// 或 https:// 开头的视频链接" };
   }
   inputUrl = String(inputUrl).trim();
-  const jx = cfg.parse.find((p) => p.off);
+  const pick = pickParse(cfg, jxIdx);
+  const jx = pick.item;
   // 1. 直链（mp4/m3u8 等）：解析接口启用时默认走解析，否则直接播放
   if (detectVideoFile(inputUrl)) {
     if (jx) {
       const purl = appendTarget(jx.url, inputUrl);
-      return {
+      return withJx({
         success: 1,
         type: "jx",
         title: "视频",
@@ -454,7 +500,7 @@ export async function getVideoByUrl(inputUrl, cfg) {
         url: purl,
         parts: [{ name: "播放", url: purl, raw: inputUrl }],
         sources: [{ flag: "解析", parts: [{ name: "播放", url: purl, raw: inputUrl }] }],
-      };
+      }, pick);
     }
     return {
       success: 1,
@@ -485,16 +531,17 @@ export async function getVideoByUrl(inputUrl, cfg) {
         best.sites && best.sites.length > 1
           ? await aggregateByIds(
               JSON.stringify(best.sites.map((s) => ({ flag: s.flag, id: s.id }))),
-              cfg
+              cfg,
+              pick.index
             )
-          : await getVideoById(best.flag, best.id, cfg);
+          : await getVideoById(best.flag, best.id, cfg, pick.index);
       if (matched.success) return matched;
     }
   }
   // 3. 第三方解析接口兜底（iframe）
   if (jx) {
     const purl = appendTarget(jx.url, inputUrl);
-    return {
+    return withJx({
       success: 1,
       type: "jx",
       title: title || "视频",
@@ -504,13 +551,13 @@ export async function getVideoByUrl(inputUrl, cfg) {
       url: purl,
       parts: [{ name: "播放", url: purl, raw: inputUrl }],
       sources: [{ flag: "解析", parts: [{ name: "播放", url: purl, raw: inputUrl }] }],
-    };
+    }, pick);
   }
   return { success: 0, m: "解析失败，请检查资源站与解析接口配置" };
 }
 
-/** 聚合多资源站同一影片：按 [{flag,id}] 合并所有站的播放源为多线路 */
-export async function aggregateByIds(sitesRaw, cfg) {
+/** 聚合多资源站同一影片：按 [{flag,id}] 合并所有站的播放源为多线路（jxIdx 指定解析接口） */
+export async function aggregateByIds(sitesRaw, cfg, jxIdx) {
   let pairs;
   try {
     pairs = JSON.parse(sitesRaw);
@@ -518,6 +565,8 @@ export async function aggregateByIds(sitesRaw, cfg) {
     pairs = null;
   }
   if (!Array.isArray(pairs) || !pairs.length) return { success: 0, m: "sites 参数错误" };
+  // 防御：sites 由前端拼接但可被伪造，限制数量避免单次请求打爆上游资源站
+  if (pairs.length > 12) pairs = pairs.slice(0, 12);
   // 并发请求各资源站，避免串行等待拖慢聚合页
   const settled = await Promise.all(
     pairs.map(async (s) => {
@@ -525,7 +574,7 @@ export async function aggregateByIds(sitesRaw, cfg) {
       if (isNaN(flag) || flag < 0 || flag >= cfg.resources.length) return null;
       const id = s.id == null ? "" : String(s.id).trim();
       if (!id) return null;
-      return getVideoById(flag, id, cfg);
+      return getVideoById(flag, id, cfg, jxIdx);
     })
   );
   const results = settled.filter((r) => r && r.success);
@@ -544,7 +593,7 @@ export async function aggregateByIds(sitesRaw, cfg) {
   }
   if (!sources.length) return { success: 0, m: "聚合结果为空" };
   const first = sources[0];
-  return {
+  const out = {
     success: 1,
     type: results[0].type,
     title: results[0].title,
@@ -554,6 +603,12 @@ export async function aggregateByIds(sitesRaw, cfg) {
     parts: first.parts,
     sources,
   };
+  // 透传解析线路信息（各结果使用的是同一个解析接口索引）
+  if (results[0].type === "jx") {
+    out.jxIndex = results[0].jxIndex;
+    out.jxList = results[0].jxList;
+  }
+  return out;
 }
 
 // ---------- 响应 ----------

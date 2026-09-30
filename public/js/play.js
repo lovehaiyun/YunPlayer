@@ -3,31 +3,44 @@
 // ============================================================
 
 const playerEl = document.getElementById("player");
-const placeholderEl = document.getElementById("placeholder");
+let placeholderEl = document.getElementById("placeholder");
 const titleEl = document.getElementById("playTitle");
 const metaEl = document.getElementById("playMeta");
 const sourceSectionEl = document.getElementById("sourceSection");
 const sourceTabsEl = document.getElementById("sourceTabs");
+const jxSectionEl = document.getElementById("jxSection");
+const jxTabsEl = document.getElementById("jxTabs");
 const epSectionEl = document.getElementById("epSection");
 const episodesEl = document.getElementById("episodes");
 
 let currentInfo = null;   // /api/parse 返回的数据
 let hls = null;           // Hls.js 实例
-let isIframe = false;     // 当前是否为 iframe 解析模式
 let currentSources = [];  // 当前展示的线路（已过滤为 m3u8）
 let currentSrcIdx = 0;    // 当前选中的线路索引
+let currentPartIdx = 0;   // 当前选中的剧集索引
+let currentJxIdx = 0;     // 当前选中的解析接口索引
+let playParams = {};      // 播放页原始请求参数（切换解析线路时复用）
 
-/** 展示加载占位 */
+/** 展示加载占位（恢复默认文案，避免上一次的错误提示残留） */
 function showLoading() {
-  if (!placeholderEl) return;
-  playerEl.classList.add("loading");
+  ensurePlaceholder();
   placeholderEl.style.display = "flex";
+  placeholderEl.innerHTML = "<div class='spin'></div><span>正在解析播放地址…</span>";
 }
 
 /** 隐藏加载占位 */
 function hideLoading() {
-  playerEl.classList.remove("loading");
   if (placeholderEl) placeholderEl.style.display = "none";
+}
+
+/** 保证占位节点始终挂在播放器内（曾因 clearPlayer 清空 innerHTML 而丢失，导致提示/错误全部失效） */
+function ensurePlaceholder() {
+  if (placeholderEl && playerEl.contains(placeholderEl)) return;
+  placeholderEl = document.createElement("div");
+  placeholderEl.className = "placeholder";
+  placeholderEl.id = "placeholder";
+  placeholderEl.style.display = "none";
+  playerEl.appendChild(placeholderEl);
 }
 
 /** m3u8 地址统一走本站代理，解决跨域/防盗链 */
@@ -57,7 +70,18 @@ function playVideo(url, autoplay) {
     if (window.Hls && Hls.isSupported()) {
       // Hls.js 接管播放：不要先把 m3u8 赋给 video.src，
       // Chrome 桌面版原生不支持 HLS，直接赋值会触发浏览器的"下载"行为
-      hls = new Hls({ enableWorker: true });
+      hls = new Hls({
+        enableWorker: true,
+        // 默认缓冲偏小，网络抖动时容易卡顿/断流，这里适当放宽并增加重试
+        maxBufferLength: 30,
+        maxMaxBufferLength: 60,
+        maxBufferSize: 60 * 1000 * 1000,
+        backBufferLength: 30,
+        abrEwmaDefaultEstimate: 1000000,
+        capLevelToPlayerSize: true,
+        fragLoadingMaxRetry: 6,
+        manifestLoadingMaxRetry: 4,
+      });
       hls.loadSource(proxyUrl(url));
       hls.attachMedia(video);
       hls.on(Hls.Events.ERROR, (e, data) => {
@@ -86,6 +110,7 @@ function playVideo(url, autoplay) {
 /** 显示播放错误 */
 function showError(msg) {
   hideLoading();
+  ensurePlaceholder();
   placeholderEl.style.display = "flex";
   placeholderEl.innerHTML =
     "<div class='empty' style='margin:0'>" + esc(msg) + "</div>";
@@ -95,7 +120,6 @@ function showError(msg) {
 function playIframe(url) {
   clearPlayer();
   hideLoading();
-  isIframe = true;
   const frame = document.createElement("iframe");
   frame.src = url;
   frame.allowFullscreen = true;
@@ -103,8 +127,9 @@ function playIframe(url) {
   playerEl.appendChild(frame);
 }
 
-/** 渲染选集列表（切换线路时需重建） */
-function renderEpisodes(parts) {
+/** 渲染选集列表（切换线路时需重建；activeIdx 为当前选中集） */
+function renderEpisodes(parts, activeIdx) {
+  const act = Number.isInteger(activeIdx) ? activeIdx : 0;
   if (!parts || parts.length <= 1) {
     epSectionEl.style.display = "none";
     episodesEl.innerHTML = "";
@@ -112,25 +137,25 @@ function renderEpisodes(parts) {
   }
   epSectionEl.style.display = "block";
   episodesEl.innerHTML = parts
-    .map((p, i) => `<span class="ep${i === 0 ? " active" : ""}" data-i="${i}">${esc(p.name)}</span>`)
+    .map((p, i) => `<span class="ep${i === act ? " active" : ""}" data-i="${i}">${esc(p.name)}</span>`)
     .join("");
 }
 
-/** 清空播放器 */
+/** 清空播放器（只移除播放元素，保留占位节点） */
 function clearPlayer() {
   if (hls) {
     hls.destroy();
     hls = null;
   }
-  isIframe = false;
-  playerEl.innerHTML = "";
+  playerEl.querySelectorAll("video, iframe").forEach((el) => el.remove());
 }
 
-/** 渲染播放 */
-function renderPlay(info) {
+/** 渲染播放（keepPos=true 时保留当前线路/选集，用于切换解析线路） */
+function renderPlay(info, keepPos) {
   if (!info || !info.success) {
     titleEl.textContent = "播放失败";
     metaEl.innerHTML = "";
+    ensurePlaceholder();
     hideLoading();
     placeholderEl.style.display = "flex";
     placeholderEl.innerHTML =
@@ -155,10 +180,30 @@ function renderPlay(info) {
     (s) => s.parts && s.parts.length && isM3u8Url(s.parts[0].raw || s.parts[0].url)
   );
   if (!currentSources.length) currentSources = all;
-  const src = currentSources[0] || { flag: "", parts: info.parts || [] };
+  // 初次加载从头播；切换解析线路时保留原来的线路与选集
+  if (!keepPos) {
+    currentSrcIdx = 0;
+    currentPartIdx = 0;
+  }
+  currentSrcIdx = Math.max(0, Math.min(currentSrcIdx, currentSources.length - 1));
+  const src = currentSources[currentSrcIdx] || { flag: "", parts: info.parts || [] };
   const parts = src.parts || [];
+  currentPartIdx = Math.max(0, Math.min(currentPartIdx, Math.max(0, parts.length - 1)));
 
-  renderEpisodes(parts.length > 1 ? parts : null);
+  renderEpisodes(parts.length > 1 ? parts : null, currentPartIdx);
+
+  // 解析线路：解析接口启用且数量 > 1 时，可手动切换（复用资源站线路的标签样式）
+  const jxList = Array.isArray(info.jxList) ? info.jxList : [];
+  if (info.type === "jx" && jxList.length > 1) {
+    const cur = typeof info.jxIndex === "number" ? info.jxIndex : currentJxIdx;
+    jxSectionEl.style.display = "block";
+    jxTabsEl.innerHTML = jxList
+      .map((n, i) => `<span class="ep${i === cur ? " active" : ""}" data-jx="${i}">${esc(n)}</span>`)
+      .join("");
+  } else {
+    jxSectionEl.style.display = "none";
+    jxTabsEl.innerHTML = "";
+  }
 
   // 多线路切换（标签显示为资源站名称）
   if (currentSources.length > 1) {
@@ -169,7 +214,7 @@ function renderPlay(info) {
         const label = from
           ? from + (currentSources.length > 1 ? " " + (i + 1) : "")
           : "线路" + (i + 1);
-        return `<span class="ep${i === 0 ? " active" : ""}" data-src="${i}">${esc(label)}</span>`;
+        return `<span class="ep${i === currentSrcIdx ? " active" : ""}" data-src="${i}">${esc(label)}</span>`;
       })
       .join("");
   } else {
@@ -177,7 +222,7 @@ function renderPlay(info) {
   }
 
   // 播放方式：解析接口模式(jx)一律 iframe；直链模式按地址判断
-  const playUrl = parts.length ? parts[0].url : info.url;
+  const playUrl = parts.length ? (parts[currentPartIdx] || parts[0]).url : info.url;
   if (info.type === "jx") {
     playIframe(playUrl);
   } else if (/\.(mp4|m3u8|webm|ogg|m4v)([?#]|$)/i.test(playUrl)) {
@@ -208,7 +253,24 @@ episodesEl.addEventListener("click", (e) => {
   if (!ep) return;
   episodesEl.querySelectorAll(".ep").forEach((x) => x.classList.remove("active"));
   ep.classList.add("active");
-  switchPlay(currentInfo, currentSrcIdx, parseInt(ep.dataset.i, 10));
+  const i = parseInt(ep.dataset.i, 10);
+  currentPartIdx = isNaN(i) ? 0 : i;
+  switchPlay(currentInfo, currentSrcIdx, currentPartIdx);
+});
+
+jxTabsEl.addEventListener("click", (e) => {
+  const tab = e.target.closest(".ep");
+  if (!tab || tab.classList.contains("active")) return;
+  jxTabsEl.querySelectorAll(".ep").forEach((x) => x.classList.remove("active"));
+  tab.classList.add("active");
+  const idx = parseInt(tab.dataset.jx, 10);
+  currentJxIdx = isNaN(idx) ? 0 : idx;
+  // 同步到地址栏，便于分享/刷新后保持所选解析线路
+  const u = new URL(window.location.href);
+  u.searchParams.set("jx", String(currentJxIdx));
+  history.replaceState(null, "", u);
+  // 切换解析线路：保留当前资源站线路与选集，只重载播放器
+  loadPlay(currentJxIdx, true);
 });
 
 sourceTabsEl.addEventListener("click", (e) => {
@@ -218,12 +280,31 @@ sourceTabsEl.addEventListener("click", (e) => {
   tab.classList.add("active");
   const idx = parseInt(tab.dataset.src, 10);
   currentSrcIdx = isNaN(idx) ? 0 : idx;
+  currentPartIdx = 0;
   // 切换线路后选集可能完全不同，需重建选集列表
   const src = currentSources[currentSrcIdx];
   const parts = (src && src.parts) || [];
-  renderEpisodes(parts.length > 1 ? parts : null);
+  renderEpisodes(parts.length > 1 ? parts : null, 0);
   switchPlay(currentInfo, currentSrcIdx, 0);
 });
+
+// ---------- 加载与渲染 ----------
+/** 请求播放数据并渲染（jxIdx 指定解析接口索引；keepPos 为 true 时保留当前线路与选集） */
+async function loadPlay(jxIdx, keepPos) {
+  const params = Object.assign({}, playParams);
+  if (jxIdx != null) params.jx = String(jxIdx);
+  // 请求期间给出加载反馈，避免切换解析线路时长时间黑屏看起来像"卡住/没反应"
+  showLoading();
+  let info;
+  try {
+    info = await api("/api/parse", params);
+  } catch (e) {
+    info = { success: 0, m: "请求失败：" + e.message };
+  }
+  currentInfo = info;
+  if (info && info.success && typeof info.jxIndex === "number") currentJxIdx = info.jxIndex;
+  renderPlay(info, keepPos === true);
+}
 
 // ---------- 初始化 ----------
 (async () => {
@@ -233,25 +314,24 @@ sourceTabsEl.addEventListener("click", (e) => {
   const wd = qs("wd");
   const sites = qs("sites");
 
-  let info;
-  try {
-    if (sites) {
-      // 聚合播放：一次合并多个资源站的播放源
-      info = await api("/api/parse", { sites });
-    } else if (id) {
-      info = await api("/api/parse", { id, flag: flag || "0" });
-    } else if (url) {
-      info = await api("/api/parse", { url });
-    } else if (wd) {
-      info = await api("/api/parse", { wd });
-    } else {
-      info = { success: 0, m: "缺少播放参数，请从首页搜索进入" };
-    }
-  } catch (e) {
-    info = { success: 0, m: "请求失败：" + e.message };
+  if (sites) {
+    // 聚合播放：一次合并多个资源站的播放源
+    playParams = { sites };
+  } else if (id) {
+    playParams = { id, flag: flag || "0" };
+  } else if (url) {
+    playParams = { url };
+  } else if (wd) {
+    playParams = { wd };
   }
-  currentInfo = info;
-  renderPlay(info);
+
+  if (!Object.keys(playParams).length) {
+    currentInfo = { success: 0, m: "缺少播放参数，请从首页搜索进入" };
+    renderPlay(currentInfo);
+    return;
+  }
+  const jx0 = parseInt(qs("jx"), 10);
+  await loadPlay(isNaN(jx0) ? 0 : jx0);
 })();
 
 // ---------- 页脚站点信息（与首页保持一致的站点名） ----------

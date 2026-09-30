@@ -226,8 +226,7 @@ wrangler pages deploy public --project-name yunplayer --commit-dirty=true
 theme: "dark",           // 模板：dark 深色科技风 / light 浅色简约风
 
 footer: {                // 页脚（copyright 支持 {year} {title} 占位符）
-  contactText: "联系我们",
-  email: "admin@example.com",
+  link: "https://github.com/你的用户名/仓库名",   // 页脚显示为「开源地址」，点击新标签打开
   note: "……免责声明……",
   copyright: "© {year} {title} 版权所有",
   icp: "京ICP备00000000号",

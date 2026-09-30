@@ -23,11 +23,11 @@ export const CONFIG = {
   theme: "dark",
 
   // 页脚信息（均可在后台修改）
+  //   link      开源地址，页脚显示为「开源地址」，点击在新标签页打开；留空则隐藏
   //   copyright 支持 {year} {title} 两个占位符，会自动替换为当前年份与站点名
   footer: {
-    contactText: "联系我们",
-    email: "admin@example.com",
-    note: "本站为技术演示站点，不存储、不制作、不提供任何影视资源，全部内容均来自第三方公开接口，版权归原权利人所有；如相关内容侵犯了您的合法权益，请通过上方邮箱与我们联系，核实后将及时处理。",
+    link: "https://github.com/lovehaiyun/YunPlayer",
+    note: "本站为技术演示站点，不存储、不制作、不提供任何影视资源，全部内容均来自第三方公开接口，版权归原权利人所有；如相关内容侵犯了您的合法权益，请通过页脚的开源地址与我们联系，核实后将及时处理。",
     copyright: "© {year} {title} 版权所有",
     icp: "京ICP备00000000号",
     extra: "本站仅供技术学习与研究使用",

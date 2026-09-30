@@ -70,8 +70,7 @@ async function loadConfig() {
   pickTheme(currentTheme);
   // 站点页脚
   const f = c.footer || {};
-  document.getElementById("cfgFootContact").value = f.contactText || "";
-  document.getElementById("cfgFootEmail").value = f.email || "";
+  document.getElementById("cfgFootLink").value = f.link || "";
   document.getElementById("cfgFootNote").value = f.note || "";
   document.getElementById("cfgFootCopyright").value = f.copyright || "";
   document.getElementById("cfgFootIcp").value = f.icp || "";
@@ -193,8 +192,7 @@ document.getElementById("saveBtn").addEventListener("click", async () => {
       theme: currentTheme,
       hot: document.getElementById("cfgHot").value.split(/[,，]/).map((s) => s.trim()).filter(Boolean),
       footer: {
-        contactText: document.getElementById("cfgFootContact").value.trim(),
-        email: document.getElementById("cfgFootEmail").value.trim(),
+        link: document.getElementById("cfgFootLink").value.trim(),
         note: document.getElementById("cfgFootNote").value.trim(),
         copyright: document.getElementById("cfgFootCopyright").value.trim(),
         icp: document.getElementById("cfgFootIcp").value.trim(),

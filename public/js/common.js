@@ -53,6 +53,12 @@ function applySiteMeta(data) {
   const token = (s) =>
     String(s == null ? "" : s).replace(/\{year\}/g, year).replace(/\{title\}/g, title);
 
+  const setText = (sel, val) => {
+    document.querySelectorAll(sel).forEach((el) => {
+      el.textContent = val;
+    });
+  };
+  // 留空则隐藏该项（连带其分隔符）
   const setOptional = (sel, val) => {
     document.querySelectorAll(sel).forEach((el) => {
       el.textContent = val;
@@ -60,18 +66,16 @@ function applySiteMeta(data) {
     });
   };
 
-  // 留空即隐藏该项（连带其分隔符）
-  setOptional("[data-foot-contact]", str(f.contactText));
-  setOptional("[data-foot-note]", token(f.note));
-  setOptional("[data-foot-copyright]", token(f.copyright));
+  if (str(f.note)) setText("[data-foot-note]", token(f.note));
+  if (str(f.copyright)) setText("[data-foot-copyright]", token(f.copyright));
   setOptional("[data-foot-icp]", str(f.icp));
   setOptional("[data-foot-extra]", str(f.extra));
 
-  // 联系我们邮箱
-  const email = str(f.email);
-  document.querySelectorAll("[data-foot-mail]").forEach((el) => {
-    if (email) {
-      el.href = "mailto:" + email;
+  // 开源地址（新标签页打开；留空则隐藏）
+  const link = str(f.link);
+  document.querySelectorAll("[data-foot-link]").forEach((el) => {
+    if (link) {
+      el.href = link;
       el.style.display = "";
     } else {
       el.style.display = "none";

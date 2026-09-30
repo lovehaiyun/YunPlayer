@@ -47,11 +47,12 @@ export const CONFIG = {
   ],
 
   // 资源站列表（off=1 启用）
-  // 下列为常用的公共资源站示例，可用性请自行验证，失效可停用或替换
+  // 下列为实测可用的公共资源站，如失效可停用或替换为你自己的地址
   resources: [
-    { name: "非凡资源", url: "https://json.ffzyapi.com/api.php/provide/vod/", type: 0, off: 1 },
-    { name: "量子资源", url: "https://json.qlqwapi.com/api.php/provide/vod/", type: 0, off: 1 },
-    { name: "飞速资源", url: "https://json.bfzyapi.com/api.php/provide/vod/", type: 0, off: 1 },
+    { name: "电影天堂", url: "http://caiji.dyttzyapi.com/api.php/provide/vod", type: 0, off: 1 },
+    { name: "非凡影视", url: "http://ffzy5.tv/api.php/provide/vod", type: 0, off: 1 },
+    { name: "量子影视", url: "https://cj.lziapi.com/api.php/provide/vod", type: 0, off: 1 },
+    { name: "360资源", url: "https://360zyzz.com/api.php/provide/vod", type: 0, off: 1 },
     // 自定义资源站示例（苹果CMS JSON 接口）：
     // { name: "我的资源", url: "https://你的域名.com/api.php/provide/vod/", type: 0, off: 1 },
   ],

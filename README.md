@@ -238,13 +238,16 @@ parse: [                 // 第三方解析接口（兜底）
 ],
 
 resources: [             // 资源站（苹果CMS类接口）
-  { name: "非凡资源", url: "https://json.ffzyapi.com/api.php/provide/vod/", type: 0, off: 1 },
+  { name: "电影天堂", url: "http://caiji.dyttzyapi.com/api.php/provide/vod", type: 0, off: 1 },
+  { name: "非凡影视", url: "http://ffzy5.tv/api.php/provide/vod", type: 0, off: 1 },
+  { name: "量子影视", url: "https://cj.lziapi.com/api.php/provide/vod", type: 0, off: 1 },
+  { name: "360资源", url: "https://360zyzz.com/api.php/provide/vod", type: 0, off: 1 },
   // type=0 搜索用 ?wd=关键词 ；type=1 用 /wd/关键词
 ],
 ```
 
 - 资源站要求：支持 `?wd=关键词` 搜索、`?ac=videolist&ids=ID` 取播放数据（JSON 或 XML 均可）
-- 示例接口可能失效，请自行替换为你可用的地址，`off: 0` 可停用
+- 上面为实测可用的公共接口，如失效请替换为你自己的地址，`off: 0` 可停用
 
 ## 目录结构
 

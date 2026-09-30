@@ -164,7 +164,7 @@ curl https://yunplayer.pages.dev/api/site
 > 不用后台功能时可以不绑 KV，站点仍可正常搜索 / 播放（配置走 `_config.js` 默认值）。
 > 若控制台提示未绑定 KV：项目 → **Settings → Bindings** → Add → KV namespace，变量名填 `CONFIG_KV`，再重新执行第 5 步。
 >
-> ⚠️ 这种方式**没有 Git 自动部署**，以后每次改了代码都要重新执行第 5 步。
+> ⚠️ 这种方式**没有 Git 自动部署**，以后每次改了代码都要重新执行第 5 步（详见下方「日常更新与回滚」）。
 
 ### 部署后验证（必做）
 
@@ -175,6 +175,31 @@ curl https://yunplayer.pages.dev/api/site
 ### 绑定自定义域名（可选）
 
 Pages 项目 → **Custom domains** → **Set up a custom domain** → 输入你的域名，并按提示在 DNS 处配置记录（域名已托管在 Cloudflare 时会自动完成）。绑定后 `*.pages.dev` 仍可访问。
+
+### 日常更新与回滚
+
+改了代码之后怎么上线，取决于你当初用的是哪种部署方式：
+
+| 你的部署方式 | 改了代码之后怎么上线 |
+|---|---|
+| 方式一（Connect to Git） | 往仓库 commit / push，Cloudflare 自动重新构建部署 |
+| 方式二（Wrangler 直接上传） | **push 不会自动上线**，必须手动重新部署一次 |
+
+**方式二（Wrangler 直传）的日常更新流程** —— 在项目根目录依次执行：
+
+```bash
+git add -A
+git commit -m "你的改动说明"
+git push
+wrangler pages deploy public --project-name yunplayer --commit-dirty=true
+```
+
+> 最后一条才是真正上线，前三条只是同步代码到仓库。
+> 不加 `--commit-dirty=true` 也能部署成功，只是 wrangler 发现工作区有未提交改动时会打一条警告，加上更清爽。
+
+**回滚**：项目 → **Deployments** → 找到上一个正常的版本 → 右侧 **⋯ → Rollback to this deployment**，一键还原。回滚只影响前端与 Functions，**KV 中的后台配置不受影响**。
+
+> Windows 上用 git 若出现 `LF will be replaced by CRLF` 警告，只是换行符提示，无害，可忽略。
 
 ## 配置
 
